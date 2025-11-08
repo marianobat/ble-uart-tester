@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SmartTEAM – Bloques Horizontales (BLE ↔ Arduino Nano)</title>
+  <title>SmartTEAM – Programación por Bloques (BLE ↔ Arduino Nano)</title>
   <script src="https://unpkg.com/blockly/blockly.min.js"></script>
   <style>
     :root{--bg:#0e1020;--panel:#151935;--text:#e9ecff;--muted:#a9b2d6;--accent:#7aa2ff;--ok:#40dba5;--warn:#ffad5a}
@@ -29,7 +29,7 @@
 </head>
 <body>
   <header>
-    <h1>SmartTEAM – Bloques Horizontales</h1>
+    <h1>SmartTEAM – Programación por Bloques</h1>
     <span id="status" class="pill">Desconectado</span>
   </header>
   <div class="wrap">
@@ -61,23 +61,22 @@
     </div>
   </div>
 
-  <!-- TOOLBOX: todas las acciones son "reporters" (salida valor) para componer en fila -->
   <xml id="toolbox" style="display:none">
-    <category name="Programa (fila)" colour="#7aa2ff">
-      <block type="program_row"></block>
+    <category name="Programa" colour="#7aa2ff">
+      <block type="program_root"></block>
     </category>
     <sep></sep>
     <category name="Acciones" colour="#6dd3b1">
-      <block type="led_color_v"></block>
-      <block type="motor_action_v"></block>
-      <block type="note_play_v"></block>
-      <block type="wait_secs_v"></block>
-      <block type="skip_inst_v"></block>
+      <block type="led_color"></block>
+      <block type="motor_action"></block>
+      <block type="note_play"></block>
+      <block type="wait_secs"></block>
+      <block type="skip_inst"></block>
     </category>
   </xml>
 
 <script>
-// ====== Blockly setup con renderer "zelos" y inputs en línea ======
+// ====== Blockly setup ======
 const workspace = Blockly.inject('blocklyDiv', {
   toolbox: document.getElementById('toolbox'),
   renderer: 'zelos',
@@ -86,87 +85,127 @@ const workspace = Blockly.inject('blocklyDiv', {
   theme: Blockly.Themes.Dark
 });
 
-// === Modelo horizontal ===
-// En Blockly, las conexiones "statement" apilan vertical. Para "horizontales",
-// modelamos cada instrucción como un BLOQUE DE VALOR (con "output") y un bloque
-// "program_row" que tiene 15 ENTRADAS DE VALOR en línea.
-// Así se compone una FILA de 15 "reporters" (código,config) y el generador arma 30 bytes.
-
-// Bloque contenedor: 15 entradas de valor inline
-Blockly.Blocks['program_row'] = {
+// Block: program root (statement container)
+Blockly.Blocks['program_root'] = {
   init: function(){
-    this.appendDummyInput().appendField('Programa en fila (15)');
-    // Crear 15 inputs de valor en una o más filas (usando EndRowInput para saltos)
-    for(let i=1;i<=15;i++){
-      const inp = this.appendValueInput('I'+i).setCheck('inst');
-      if(i%8===0) this.appendEndRowInput(); // salto de línea para no desbordar
-    }
-    this.setInputsInline(true);
-    this.setColour(210);
-    this.setTooltip('Colocá hasta 15 instrucciones (se rellenan vacíos con 0,0).');
+    this.appendDummyInput().appendField('Programa (máx 15 instrucciones)');
+    this.appendStatementInput('SEQ').setCheck(null).appendField('instrucciones');
+    this.setColour(200);
+    this.setTooltip('Arrastrá aquí las instrucciones en orden.');
+    this.setHelpUrl('');
   }
 };
 
-// === Instrucciones como "reporters" (output: 'inst') ===
-function makeReporter(type, label, opts){
-  Blockly.Blocks[type] = {
-    init: function(){
-      this.appendDummyInput().appendField(label)
-        .appendField(new Blockly.FieldDropdown(opts),'CFG');
-      this.setOutput(true, 'inst');
-      this.setColour(120);
-      this.setTooltip(label);
-    }
-  };
-}
-
-makeReporter('led_color_v', 'LED', [
-  ['apagar (0)','0'], ['rojo (1)','1'], ['verde (2)','2'], ['azul (3)','3'],
-  ['amarillo (4)','4'], ['magenta (5)','5'], ['cian (6)','6'],
-  ['naranja (7)','7'], ['violeta (8)','8'], ['blanco (9)','9']
-]);
-
-makeReporter('motor_action_v', 'Motor', [
-  ['parar (0)','0'], ['avanzar (1)','1'], ['retroceder (2)','2'], ['derecha (3)','3'], ['izquierda (4)','4']
-]);
-
-makeReporter('note_play_v', 'Nota', [
-  ['off (0)','0'], ['do (1)','1'], ['re (2)','2'], ['mi (3)','3'], ['fa (4)','4'], ['sol (5)','5'], ['la (6)','6'], ['si (7)','7']
-]);
-
-makeReporter('wait_secs_v', 'Esperar', [
-  ['1','1'], ['2','2'], ['3','3'], ['4','4'], ['5','5'], ['6','6'], ['7','7'], ['8','8'], ['9','9']
-]);
-
-makeReporter('skip_inst_v', 'Saltear', [ ['(0,0)','0'] ]);
-
-// === Serialización a pares (code,config) ===
-function blockToPair(block){
-  switch(block.type){
-    case 'led_color_v': return [1, Number(block.getFieldValue('CFG'))];
-    case 'motor_action_v': return [2, Number(block.getFieldValue('CFG'))];
-    case 'note_play_v': return [3, Number(block.getFieldValue('CFG'))];
-    case 'wait_secs_v': return [4, Number(block.getFieldValue('CFG'))];
-    case 'skip_inst_v': return [0, 0];
+// Instruction blocks
+Blockly.Blocks['led_color'] = {
+  init: function(){
+    this.appendDummyInput()
+      .appendField('LED color')
+      .appendField(new Blockly.FieldDropdown([
+        ['apagar (0)','0'],
+        ['rojo (1)','1'],['verde (2)','2'],['azul (3)','3'],
+        ['amarillo (4)','4'],['magenta (5)','5'],['cian (6)','6'],
+        ['naranja (7)','7'],['violeta (8)','8'],['blanco (9)','9']
+      ]),'CFG');
+    this.setPreviousStatement(true,null);
+    this.setNextStatement(true,null);
+    this.setColour(110);
+    this.setTooltip('Instrucción 1: NeoPixel.');
   }
-  return [0,0];
-}
+};
 
+Blockly.Blocks['motor_action'] = {
+  init: function(){
+    this.appendDummyInput()
+      .appendField('Motores')
+      .appendField(new Blockly.FieldDropdown([
+        ['parar (0)','0'],
+        ['avanzar (1)','1'],
+        ['retroceder (2)','2'],
+        ['derecha (3)','3'],
+        ['izquierda (4)','4']
+      ]),'CFG');
+    this.setPreviousStatement(true,null);
+    this.setNextStatement(true,null);
+    this.setColour(20);
+    this.setTooltip('Instrucción 2: mover 400 ms y frenar.');
+  }
+};
+
+Blockly.Blocks['note_play'] = {
+  init: function(){
+    this.appendDummyInput()
+      .appendField('Nota (buzzer)')
+      .appendField(new Blockly.FieldDropdown([
+        ['off (0)','0'],
+        ['do (1)','1'],['re (2)','2'],['mi (3)','3'],
+        ['fa (4)','4'],['sol (5)','5'],['la (6)','6'],['si (7)','7']
+      ]),'CFG');
+    this.setPreviousStatement(true,null);
+    this.setNextStatement(true,null);
+    this.setColour(300);
+    this.setTooltip('Instrucción 3: tono 300 ms.');
+  }
+};
+
+Blockly.Blocks['wait_secs'] = {
+  init: function(){
+    this.appendDummyInput()
+      .appendField('Esperar (segundos)')
+      .appendField(new Blockly.FieldDropdown([
+        ['1','1'],['2','2'],['3','3'],['4','4'],['5','5'],['6','6'],['7','7'],['8','8'],['9','9']
+      ]),'CFG');
+    this.setPreviousStatement(true,null);
+    this.setNextStatement(true,null);
+    this.setColour(50);
+    this.setTooltip('Instrucción 4: esperar 1..9 s.');
+  }
+};
+
+Blockly.Blocks['skip_inst'] = {
+  init: function(){
+    this.appendDummyInput().appendField('Saltear (código 0)');
+    this.setPreviousStatement(true,null);
+    this.setNextStatement(true,null);
+    this.setColour(0);
+    this.setTooltip('Código 0: no ejecuta, avanza al siguiente paquete.');
+  }
+};
+
+// Helper: build program -> array of [code, config] (len 15)
 function buildProgram(){
-  const tops = workspace.getTopBlocks(true);
-  const prog = [];
-  const row = tops.find(b=>b.type==='program_row');
-  if(!row) throw new Error('Agregá el bloque "Programa en fila"');
-  for(let i=1;i<=15;i++){
-    const input = row.getInput('I'+i);
-    const target = input && input.connection && input.connection.targetBlock();
-    if(target) prog.push(blockToPair(target)); else prog.push([0,0]);
+  const rootBlocks = workspace.getTopBlocks(true);
+  const program = [];
+  let start = rootBlocks.find(b => b.type === 'program_root');
+  if(!start){ throw new Error('Agregá el bloque "Programa" y encadená las instrucciones.'); }
+  let conn = start.getInput('SEQ').connection.targetBlock();
+  let safety = 0;
+  while(conn && safety < 200){
+    const t = conn.type;
+    if(t === 'led_color'){
+      program.push([1, Number(conn.getFieldValue('CFG'))]);
+    } else if(t === 'motor_action'){
+      program.push([2, Number(conn.getFieldValue('CFG'))]);
+    } else if(t === 'note_play'){
+      program.push([3, Number(conn.getFieldValue('CFG'))]);
+    } else if(t === 'wait_secs'){
+      program.push([4, Number(conn.getFieldValue('CFG'))]);
+    } else if(t === 'skip_inst'){
+      program.push([0, 0]);
+    }
+    conn = conn.getNextBlock();
+    safety++;
   }
-  return prog;
+  // Trim/pad to exactly 15 packets
+  const trimmed = program.slice(0,15);
+  while(trimmed.length < 15) trimmed.push([0,0]);
+  return trimmed;
 }
 
 function toHexByte(n){ return n.toString(16).padStart(2,'0'); }
-function programToHexString(pairs){ return pairs.map(([c,k]) => toHexByte(c)+toHexByte(k)).join(''); }
+function programToHexString(pairs){
+  return pairs.map(([c,k]) => toHexByte(c) + toHexByte(k)).join('');
+}
 
 // ====== BLE (FFE0/FFE1/FFE2) ======
 let device, server, service, charWrite, charNotify;
@@ -219,12 +258,12 @@ async function sendProgram(){
 $('#btnConnect').addEventListener('click', connect);
 $('#btnDisconnect').addEventListener('click', ()=>{ if(device?.gatt?.connected) device.gatt.disconnect(); });
 $('#btnSend').addEventListener('click', sendProgram);
-$('#btnClear').addEventListener('click', ()=>{ workspace.clear(); seed(); });
+$('#btnClear').addEventListener('click', ()=>{ workspace.clear(); });
 
 $('#btnSave').addEventListener('click', ()=>{
   const data = Blockly.serialization.workspaces.save(workspace);
   const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download='smartteam_blocks_horizontal.json'; a.click(); URL.revokeObjectURL(a.href);
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download='smartteam_blocks_project.json'; a.click(); URL.revokeObjectURL(a.href);
 });
 $('#btnLoad').addEventListener('click', ()=> $('#fileLoad').click());
 $('#fileLoad').addEventListener('change', (e)=>{
@@ -233,15 +272,15 @@ $('#fileLoad').addEventListener('change', (e)=>{
   r.readAsText(f);
 });
 
-function seed(){
+// Seed workspace with a root block
+(function seed(){
   const xmlText = `
   <xml xmlns="https://developers.google.com/blockly/xml">
-    <block type="program_row" id="root" deletable="false" x="40" y="30"></block>
+    <block type="program_root" id="root" deletable="false" x="40" y="30"></block>
   </xml>`;
   const xml = Blockly.Xml.textToDom(xmlText);
   Blockly.Xml.domToWorkspace(xml, workspace);
-}
-seed();
+})();
 </script>
 </body>
 </html>
