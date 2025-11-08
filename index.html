@@ -3,33 +3,33 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SmartTEAM – Programación por Bloques (BLE ↔ Arduino Nano)</title>
+  <title>SmartTEAM – Bloques Horizontales (BLE ↔ Arduino Nano)</title>
   <script src="https://unpkg.com/blockly/blockly.min.js"></script>
   <style>
     :root{--bg:#0e1020;--panel:#151935;--text:#e9ecff;--muted:#a9b2d6;--accent:#7aa2ff;--ok:#40dba5;--warn:#ffad5a}
     *{box-sizing:border-box}
-    body{margin:0;background:linear-gradient(180deg,#0e1020,#111437);color:var(--text);font:14px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    body{margin:0;background:linear-gradient(180deg,#0e1020,#111437);color:var(--text);font:15px/1.6 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
     header{display:flex;align-items:center;gap:12px;padding:14px 16px;background:#0d1027;position:sticky;top:0;z-index:5}
     h1{font-size:18px;margin:0}
-    .pill{padding:4px 8px;border-radius:999px;background:#232a50;color:#cbd3ff;font-size:12px}
+    .pill{padding:6px 10px;border-radius:999px;background:#232a50;color:#cbd3ff;font-size:12px}
     .wrap{display:grid;grid-template-columns: 1fr 360px; gap:12px; padding:12px}
     .card{background:var(--panel);border-radius:14px;padding:12px;box-shadow:0 6px 24px rgba(0,0,0,.25)}
     #blocklyDiv{height:72vh;min-height:520px;width:100%;border-radius:12px;overflow:hidden}
     .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-    button{appearance:none;border:0;border-radius:10px;padding:9px 12px;background:#232a50;color:var(--text);cursor:pointer}
+    button{appearance:none;border:0;border-radius:12px;padding:10px 14px;background:#232a50;color:#var(--text);cursor:pointer;box-shadow:inset 0 -2px 0 rgba(0,0,0,.2)}
     button.primary{background:linear-gradient(90deg,#5a7aff,#7aa2ff)}
     button.ok{background:linear-gradient(90deg,#2ccfa0,#40dba5)}
     button.warn{background:linear-gradient(90deg,#ffad5a,#ffc46b);color:#111}
     button:disabled{opacity:.6;cursor:not-allowed}
-    textarea, input{width:100%;border:1px solid #2c3566;background:#0f1330;color:var(--text);border-radius:10px;padding:8px}
+    textarea, input{width:100%;border:1px solid #2c3566;background:#0f1330;color:#e9ecff;border-radius:12px;padding:10px}
     code.inline{background:#0f1330;padding:2px 6px;border-radius:6px}
     .log{height:160px;overflow:auto;background:#0d1027;border:1px solid #2c3566;border-radius:10px;padding:8px;font-family:ui-monospace,Menlo,Consolas,monospace}
-    label{font-weight:600;color:var(--muted);display:block;margin-bottom:6px}
+    label{font-weight:600;color:#a9b2d6;display:block;margin-bottom:6px}
   </style>
 </head>
 <body>
   <header>
-    <h1>SmartTEAM – Programación por Bloques</h1>
+    <h1>SmartTEAM – Bloques Horizontales</h1>
     <span id="status" class="pill">Desconectado</span>
   </header>
   <div class="wrap">
@@ -61,161 +61,132 @@
     </div>
   </div>
 
+  <!-- TOOLBOX: estilo Scratch (colores y hat) -->
   <xml id="toolbox" style="display:none">
-    <category name="Programa" colour="#7aa2ff">
-      <block type="program_root"></block>
+    <category name="Programa (fila)" categorystyle="events_category">
+      <block type="program_row"></block>
     </category>
     <sep></sep>
-    <category name="Acciones" colour="#6dd3b1">
-      <block type="led_color"></block>
-      <block type="motor_action"></block>
-      <block type="note_play"></block>
-      <block type="wait_secs"></block>
-      <block type="skip_inst"></block>
+    <category name="Acciones" categorystyle="motion_category">
+      <block type="led_color_v"></block>
+      <block type="motor_action_v"></block>
+      <block type="note_play_v"></block>
+      <block type="wait_secs_v"></block>
+      <block type="skip_inst_v"></block>
     </category>
   </xml>
 
 <script>
-// ====== Blockly setup ======
+// ====== Theme Scratch-like (colores y estilos) ======
+const SmartScratchTheme = Blockly.Theme.defineTheme('smart_scratch', {
+  'base': Blockly.Themes.Dark,
+  'blockStyles': {
+    'events_blocks': { colourPrimary: '#FFBF00' },
+    'motion_blocks': { colourPrimary: '#4C97FF' },
+    'looks_blocks':  { colourPrimary: '#9966FF' },
+    'sound_blocks':  { colourPrimary: '#CF63CF' },
+    'control_blocks':{ colourPrimary: '#FFAB19' },
+    'sensing_blocks':{ colourPrimary: '#5CB1D6' },
+    'led_blocks':    { colourPrimary: '#59C059' },
+    'motor_blocks':  { colourPrimary: '#FF661A' }
+  },
+  'categoryStyles': {
+    'events_category': { colour: '#FFBF00' },
+    'motion_category': { colour: '#4C97FF' },
+    'looks_category':  { colour: '#9966FF' }
+  }
+});
+
+// ====== Inyección con renderer Scratch (zelos) ======
 const workspace = Blockly.inject('blocklyDiv', {
   toolbox: document.getElementById('toolbox'),
   renderer: 'zelos',
+  theme: SmartScratchTheme,
   trashcan: true,
-  grid: {spacing: 20, length: 3, colour: '#2b3166', snap: true},
-  theme: Blockly.Themes.Dark
+  grid: {spacing: 24, length: 3, colour: '#2b3166', snap: true}
 });
 
-// Block: program root (statement container)
-Blockly.Blocks['program_root'] = {
-  init: function(){
-    this.appendDummyInput().appendField('Programa (máx 15 instrucciones)');
-    this.appendStatementInput('SEQ').setCheck(null).appendField('instrucciones');
-    this.setColour(200);
-    this.setTooltip('Arrastrá aquí las instrucciones en orden.');
-    this.setHelpUrl('');
-  }
-};
+// === Bloques JSON con HAT (estilo Scratch) ===
+Blockly.common.defineBlocksWithJsonArray([
+  {
+    "type": "program_row",
+    "message0": "Programa en fila (15)",
+    "inputsInline": true,
+    "style": "events_blocks",
+    "hat": "cap",
+    "tooltip": "Arrastrá hasta 15 acciones en una fila (se rellenan vacíos con 0,0)",
+    "helpUrl": "",
+    "mutator": "program_row_mut"
+  },
+  { "type":"led_color_v", "message0":"LED %1",
+    "args0":[{"type":"field_dropdown","name":"CFG","options":[
+      ["apagar (0)","0"],["rojo (1)","1"],["verde (2)","2"],["azul (3)","3"],
+      ["amarillo (4)","4"],["magenta (5)","5"],["cian (6)","6"],
+      ["naranja (7)","7"],["violeta (8)","8"],["blanco (9)","9"]]}],
+    "output":"inst","style":"led_blocks","tooltip":"Instrucción 1: NeoPixel" },
+  { "type":"motor_action_v", "message0":"Motor %1",
+    "args0":[{"type":"field_dropdown","name":"CFG","options":[
+      ["parar (0)","0"],["avanzar (1)","1"],["retroceder (2)","2"],["derecha (3)","3"],["izquierda (4)","4"]]}],
+    "output":"inst","style":"motor_blocks","tooltip":"Instrucción 2: Motores 400 ms" },
+  { "type":"note_play_v", "message0":"Nota %1",
+    "args0":[{"type":"field_dropdown","name":"CFG","options":[
+      ["off (0)","0"],["do (1)","1"],["re (2)","2"],["mi (3)","3"],["fa (4)","4"],["sol (5)","5"],["la (6)","6"],["si (7)","7"]]}],
+    "output":"inst","style":"sound_blocks","tooltip":"Instrucción 3: tono 300 ms" },
+  { "type":"wait_secs_v", "message0":"Esperar %1 s",
+    "args0":[{"type":"field_dropdown","name":"CFG","options":[["1","1"],["2","2"],["3","3"],["4","4"],["5","5"],["6","6"],["7","7"],["8","8"],["9","9"]]}],
+    "output":"inst","style":"control_blocks","tooltip":"Instrucción 4: esperar" },
+  { "type":"skip_inst_v", "message0":"Saltear (0,0)",
+    "output":"inst","style":"control_blocks","tooltip":"Código 0: no ejecutar" }
+]);
 
-// Instruction blocks
-Blockly.Blocks['led_color'] = {
-  init: function(){
-    this.appendDummyInput()
-      .appendField('LED color')
-      .appendField(new Blockly.FieldDropdown([
-        ['apagar (0)','0'],
-        ['rojo (1)','1'],['verde (2)','2'],['azul (3)','3'],
-        ['amarillo (4)','4'],['magenta (5)','5'],['cian (6)','6'],
-        ['naranja (7)','7'],['violeta (8)','8'],['blanco (9)','9']
-      ]),'CFG');
-    this.setPreviousStatement(true,null);
-    this.setNextStatement(true,null);
-    this.setColour(110);
-    this.setTooltip('Instrucción 1: NeoPixel.');
-  }
-};
-
-Blockly.Blocks['motor_action'] = {
-  init: function(){
-    this.appendDummyInput()
-      .appendField('Motores')
-      .appendField(new Blockly.FieldDropdown([
-        ['parar (0)','0'],
-        ['avanzar (1)','1'],
-        ['retroceder (2)','2'],
-        ['derecha (3)','3'],
-        ['izquierda (4)','4']
-      ]),'CFG');
-    this.setPreviousStatement(true,null);
-    this.setNextStatement(true,null);
-    this.setColour(20);
-    this.setTooltip('Instrucción 2: mover 400 ms y frenar.');
-  }
-};
-
-Blockly.Blocks['note_play'] = {
-  init: function(){
-    this.appendDummyInput()
-      .appendField('Nota (buzzer)')
-      .appendField(new Blockly.FieldDropdown([
-        ['off (0)','0'],
-        ['do (1)','1'],['re (2)','2'],['mi (3)','3'],
-        ['fa (4)','4'],['sol (5)','5'],['la (6)','6'],['si (7)','7']
-      ]),'CFG');
-    this.setPreviousStatement(true,null);
-    this.setNextStatement(true,null);
-    this.setColour(300);
-    this.setTooltip('Instrucción 3: tono 300 ms.');
-  }
-};
-
-Blockly.Blocks['wait_secs'] = {
-  init: function(){
-    this.appendDummyInput()
-      .appendField('Esperar (segundos)')
-      .appendField(new Blockly.FieldDropdown([
-        ['1','1'],['2','2'],['3','3'],['4','4'],['5','5'],['6','6'],['7','7'],['8','8'],['9','9']
-      ]),'CFG');
-    this.setPreviousStatement(true,null);
-    this.setNextStatement(true,null);
-    this.setColour(50);
-    this.setTooltip('Instrucción 4: esperar 1..9 s.');
-  }
-};
-
-Blockly.Blocks['skip_inst'] = {
-  init: function(){
-    this.appendDummyInput().appendField('Saltear (código 0)');
-    this.setPreviousStatement(true,null);
-    this.setNextStatement(true,null);
-    this.setColour(0);
-    this.setTooltip('Código 0: no ejecuta, avanza al siguiente paquete.');
-  }
-};
-
-// Helper: build program -> array of [code, config] (len 15)
-function buildProgram(){
-  const rootBlocks = workspace.getTopBlocks(true);
-  const program = [];
-  let start = rootBlocks.find(b => b.type === 'program_root');
-  if(!start){ throw new Error('Agregá el bloque "Programa" y encadená las instrucciones.'); }
-  let conn = start.getInput('SEQ').connection.targetBlock();
-  let safety = 0;
-  while(conn && safety < 200){
-    const t = conn.type;
-    if(t === 'led_color'){
-      program.push([1, Number(conn.getFieldValue('CFG'))]);
-    } else if(t === 'motor_action'){
-      program.push([2, Number(conn.getFieldValue('CFG'))]);
-    } else if(t === 'note_play'){
-      program.push([3, Number(conn.getFieldValue('CFG'))]);
-    } else if(t === 'wait_secs'){
-      program.push([4, Number(conn.getFieldValue('CFG'))]);
-    } else if(t === 'skip_inst'){
-      program.push([0, 0]);
+// Mutator: añade 15 entradas en fila con salto visual tras 8
+Blockly.Extensions.registerMutator('program_row_mut', {
+  mutationToDom(){ const el=document.createElement('mutation'); el.setAttribute('inputs','15'); return el; },
+  domToMutation(xml){ const n=Number(xml.getAttribute('inputs')||'15'); this.updateShape_(n); },
+  updateShape_(n){
+    while(this.inputList.length){ this.removeInput(this.inputList[0].name); }
+    this.appendDummyInput().appendField('Programa en fila (15)');
+    for(let i=1;i<=15;i++){
+      this.appendValueInput('I'+i).setCheck('inst');
+      if(i%8===0) this.appendEndRowInput();
     }
-    conn = conn.getNextBlock();
-    safety++;
+    this.setInputsInline(true);
   }
-  // Trim/pad to exactly 15 packets
-  const trimmed = program.slice(0,15);
-  while(trimmed.length < 15) trimmed.push([0,0]);
-  return trimmed;
+}, undefined, []);
+
+// === Serialización a pares (code, config) ===
+function blockToPair(block){
+  switch(block.type){
+    case 'led_color_v':   return [1, Number(block.getFieldValue('CFG'))];
+    case 'motor_action_v':return [2, Number(block.getFieldValue('CFG'))];
+    case 'note_play_v':   return [3, Number(block.getFieldValue('CFG'))];
+    case 'wait_secs_v':   return [4, Number(block.getFieldValue('CFG'))];
+    case 'skip_inst_v':   return [0, 0];
+  }
+  return [0,0];
 }
 
-function toHexByte(n){ return n.toString(16).padStart(2,'0'); }
-function programToHexString(pairs){
-  return pairs.map(([c,k]) => toHexByte(c) + toHexByte(k)).join('');
+function buildProgram(){
+  const tops = workspace.getTopBlocks(true);
+  const row = tops.find(b=>b.type==='program_row');
+  if(!row) throw new Error('Agregá el bloque "Programa en fila"');
+  const out=[];
+  for(let i=1;i<=15;i++){
+    const target = row.getInput('I'+i)?.connection?.targetBlock();
+    out.push(target ? blockToPair(target) : [0,0]);
+  }
+  return out;
 }
-
-// ====== BLE (FFE0/FFE1/FFE2) ======
-let device, server, service, charWrite, charNotify;
-const UUID_SERVICE = 0xffe0;
-const UUID_CHAR_FFE1 = 0xffe1; // RW/Notify
-const UUID_CHAR_FFE2 = 0xffe2; // W
 
 const $ = s => document.querySelector(s);
 const log = m => { const el=$('#log'); const t=new Date().toLocaleTimeString(); el.textContent += `[${t}] ${m}\n`; el.scrollTop = el.scrollHeight; };
 const setStatus = s => { $('#status').textContent = s; };
+
+// ====== BLE (FFE0/FFE1/FFE2) ======
+let device, server, service, charWrite, charNotify;
+const UUID_SERVICE = 0xffe0;
+const UUID_CHAR_FFE1 = 0xffe1;
+const UUID_CHAR_FFE2 = 0xffe2;
 
 async function connect(){
   try{
@@ -245,8 +216,8 @@ async function writeBytes(bytes){
 async function sendProgram(){
   try{
     const pairs = buildProgram();
-    const hex = programToHexString(pairs);
-    $('#hex').value = hex;
+    const hex = pairs.map(([c,k])=>c.toString(16).padStart(2,'0')+k.toString(16).padStart(2,'0')).join('');
+    document.getElementById('hex').value = hex;
     log('Enviando 15 paquetes ('+pairs.length*2+' bytes)');
     const flat = new Uint8Array(pairs.flat());
     await writeBytes(flat);
@@ -255,32 +226,33 @@ async function sendProgram(){
 }
 
 // UI bindings
-$('#btnConnect').addEventListener('click', connect);
-$('#btnDisconnect').addEventListener('click', ()=>{ if(device?.gatt?.connected) device.gatt.disconnect(); });
-$('#btnSend').addEventListener('click', sendProgram);
-$('#btnClear').addEventListener('click', ()=>{ workspace.clear(); });
+document.getElementById('btnConnect').addEventListener('click', connect);
+document.getElementById('btnDisconnect').addEventListener('click', ()=>{ if(device?.gatt?.connected) device.gatt.disconnect(); });
+document.getElementById('btnSend').addEventListener('click', sendProgram);
 
-$('#btnSave').addEventListener('click', ()=>{
+document.getElementById('btnClear').addEventListener('click', ()=>{ workspace.clear(); seed(); });
+
+document.getElementById('btnSave').addEventListener('click', ()=>{
   const data = Blockly.serialization.workspaces.save(workspace);
   const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download='smartteam_blocks_project.json'; a.click(); URL.revokeObjectURL(a.href);
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download='smartteam_blocks_horizontal.json'; a.click(); URL.revokeObjectURL(a.href);
 });
-$('#btnLoad').addEventListener('click', ()=> $('#fileLoad').click());
-$('#fileLoad').addEventListener('change', (e)=>{
+document.getElementById('btnLoad').addEventListener('click', ()=> document.getElementById('fileLoad').click());
+document.getElementById('fileLoad').addEventListener('change', (e)=>{
   const f = e.target.files[0]; if(!f) return;
   const r = new FileReader(); r.onload = ()=>{ try{ const data = JSON.parse(r.result); workspace.clear(); Blockly.serialization.workspaces.load(data, workspace);}catch(err){ log('No se pudo cargar: '+err.message);} };
   r.readAsText(f);
 });
 
-// Seed workspace with a root block
-(function seed(){
+function seed(){
   const xmlText = `
   <xml xmlns="https://developers.google.com/blockly/xml">
-    <block type="program_root" id="root" deletable="false" x="40" y="30"></block>
+    <block type="program_row" id="root" deletable="false" x="40" y="30"></block>
   </xml>`;
   const xml = Blockly.Xml.textToDom(xmlText);
   Blockly.Xml.domToWorkspace(xml, workspace);
-})();
+}
+seed();
 </script>
 </body>
 </html>
