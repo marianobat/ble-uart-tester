@@ -3,175 +3,284 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>BLE UART Tester – DX BT24 ↔ Arduino Nano</title>
+  <title>SmartTEAM – Programación por Bloques (BLE ↔ Arduino Nano)</title>
+  <script src="https://unpkg.com/blockly/blockly.min.js"></script>
   <style>
-    :root{--bg:#0f1221;--card:#181c34;--text:#e9ecff;--muted:#a9b2d6;--accent:#7aa2ff;--ok:#40dba5;--warn:#ffad5a;--err:#ff6b6b}
+    :root{--bg:#0e1020;--panel:#151935;--text:#e9ecff;--muted:#a9b2d6;--accent:#7aa2ff;--ok:#40dba5;--warn:#ffad5a}
     *{box-sizing:border-box}
-    body{margin:0;background:linear-gradient(180deg,#0f1221,#121634);color:var(--text);font:15px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
-    .wrap{max-width:880px;margin:32px auto;padding:0 16px}
-    header{display:flex;gap:12px;align-items:center;}
-    h1{font-size:22px;margin:0}
-    .card{background:var(--card);border-radius:16px;padding:16px;margin:16px 0;box-shadow:0 6px 24px rgba(0,0,0,.25)}
-    .row{display:flex;gap:12px;flex-wrap:wrap}
-    button{appearance:none;border:0;border-radius:12px;padding:10px 14px;background:#232a50;color:var(--text);cursor:pointer;box-shadow:inset 0 -2px 0 rgba(0,0,0,.2)}
+    body{margin:0;background:linear-gradient(180deg,#0e1020,#111437);color:var(--text);font:14px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    header{display:flex;align-items:center;gap:12px;padding:14px 16px;background:#0d1027;position:sticky;top:0;z-index:5}
+    h1{font-size:18px;margin:0}
+    .pill{padding:4px 8px;border-radius:999px;background:#232a50;color:#cbd3ff;font-size:12px}
+    .wrap{display:grid;grid-template-columns: 1fr 360px; gap:12px; padding:12px}
+    .card{background:var(--panel);border-radius:14px;padding:12px;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+    #blocklyDiv{height:72vh;min-height:520px;width:100%;border-radius:12px;overflow:hidden}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    button{appearance:none;border:0;border-radius:10px;padding:9px 12px;background:#232a50;color:var(--text);cursor:pointer}
     button.primary{background:linear-gradient(90deg,#5a7aff,#7aa2ff)}
     button.ok{background:linear-gradient(90deg,#2ccfa0,#40dba5)}
     button.warn{background:linear-gradient(90deg,#ffad5a,#ffc46b);color:#111}
-    button.err{background:linear-gradient(90deg,#ff6b6b,#ffa3a3)}
-    button:disabled{opacity:.5;cursor:not-allowed}
-    label{display:block;font-weight:600;margin-bottom:8px;color:var(--muted)}
-    input,textarea{width:100%;border:1px solid #2c3566;background:#0f1330;color:var(--text);border-radius:12px;padding:10px}
-    textarea{min-height:110px;resize:vertical}
+    button:disabled{opacity:.6;cursor:not-allowed}
+    textarea, input{width:100%;border:1px solid #2c3566;background:#0f1330;color:var(--text);border-radius:10px;padding:8px}
     code.inline{background:#0f1330;padding:2px 6px;border-radius:6px}
-    .log{height:180px;overflow:auto;background:#0d1027;border:1px solid #2c3566;border-radius:12px;padding:10px;font-family:ui-monospace,Menlo,Consolas,monospace}
-    .pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#232a50;color:#cbd3ff;font-size:12px;margin-right:6px}
-    .footer{color:#a9b2d6;font-size:12px}
+    .log{height:160px;overflow:auto;background:#0d1027;border:1px solid #2c3566;border-radius:10px;padding:8px;font-family:ui-monospace,Menlo,Consolas,monospace}
+    label{font-weight:600;color:var(--muted);display:block;margin-bottom:6px}
   </style>
 </head>
 <body>
+  <header>
+    <h1>SmartTEAM – Programación por Bloques</h1>
+    <span id="status" class="pill">Desconectado</span>
+  </header>
   <div class="wrap">
-    <header>
-      <h1>BLE UART Tester – DX BT24 ↔ Arduino Nano</h1>
-      <span id="status" class="pill">Desconectado</span>
-    </header>
+    <div class="card">
+      <div id="blocklyDiv"></div>
+    </div>
 
     <div class="card">
-      <div class="row">
+      <div class="row" style="margin-bottom:8px">
         <button id="btnConnect" class="primary">🔗 Conectar BLE (FFE0)</button>
         <button id="btnDisconnect">🔌 Desconectar</button>
-        <button id="btnNotify" class="ok" disabled>📡 Activar Notify</button>
       </div>
-      <div style="margin-top:8px" class="footer">
-        Servicio objetivo: <code class="inline">0xFFE0</code> · Características: <code class="inline">0xFFE1</code> (RW/Notify) o <code class="inline">0xFFE2</code> (W)
+      <div class="row" style="margin-bottom:8px">
+        <button id="btnSend" class="ok" disabled>🚀 Enviar 15 paquetes</button>
+        <button id="btnClear" class="warn">🧹 Limpiar</button>
       </div>
-    </div>
-
-    <div class="card">
-      <label for="hex">Cadena HEX (múltiplo de 2 dígitos). Para el firmware actual: exactamente 30 bytes (15 pares <code class="inline">código,config</code>).</label>
-      <textarea id="hex" placeholder="Pegá aquí tu bytearray HEX, p. ej.: 01040301040101070305040101090303040101000402000004010307"></textarea>
-      <div class="row" style="margin-top:10px">
-        <button id="btnSend" class="ok" disabled>🚀 Enviar HEX → BLE</button>
-        <button id="btnProgA" class="warn" disabled>Programa A</button>
-        <button id="btnProgB" disabled>Programa B</button>
-        <button id="btnProgC" disabled>Programa C</button>
+      <label>Bytearray HEX generado (30 bytes)</label>
+      <textarea id="hex" readonly placeholder="Se generará al presionar 'Enviar 15 paquetes'"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button id="btnSave">💾 Guardar proyecto</button>
+        <button id="btnLoad">📂 Cargar proyecto</button>
+        <input id="fileLoad" type="file" accept="application/json" style="display:none" />
       </div>
+      <div style="margin-top:10px">
+        <label>Log</label>
+        <div id="log" class="log"></div>
+      </div>
+      <div style="margin-top:8px;color:#a9b2d6">Servicio: <code class="inline">0xFFE0</code> · Características: <code class="inline">0xFFE1</code> (RW/Notify) / <code class="inline">0xFFE2</code> (W)</div>
     </div>
-
-    <div class="card">
-      <label>Log</label>
-      <div id="log" class="log"></div>
-    </div>
-
-    <div class="footer">Sugerencia iOS: usar navegador <strong>Bluefy</strong> para Web Bluetooth. En Android/desktop usá Chrome/Edge.</div>
   </div>
 
-<script>
-let device, server, service, charWrite, charNotify;
-const UUID_SERVICE = 0xffe0;        // Unknown Service (HM-10 style)
-const UUID_CHAR_FFE1 = 0xffe1;      // RW/Notify
-const UUID_CHAR_FFE2 = 0xffe2;      // W/WNR
+  <xml id="toolbox" style="display:none">
+    <category name="Programa" colour="#7aa2ff">
+      <block type="program_root"></block>
+    </category>
+    <sep></sep>
+    <category name="Acciones" colour="#6dd3b1">
+      <block type="led_color"></block>
+      <block type="motor_action"></block>
+      <block type="note_play"></block>
+      <block type="wait_secs"></block>
+      <block type="skip_inst"></block>
+    </category>
+  </xml>
 
-const $ = sel => document.querySelector(sel);
-const log = msg => { const el=$('#log'); const t=new Date().toLocaleTimeString(); el.innerText += `[${t}] ${msg}\n`; el.scrollTop = el.scrollHeight; };
-const setStatus = s => $('#status').textContent = s;
-const enableUI = en => {
-  $('#btnSend').disabled = !en;
-  $('#btnProgA').disabled = !en;
-  $('#btnProgB').disabled = !en;
-  $('#btnProgC').disabled = !en;
-  $('#btnNotify').disabled = !en;
+<script>
+// ====== Blockly setup ======
+const workspace = Blockly.inject('blocklyDiv', {
+  toolbox: document.getElementById('toolbox'),
+  renderer: 'zelos',
+  trashcan: true,
+  grid: {spacing: 20, length: 3, colour: '#2b3166', snap: true},
+  theme: Blockly.Themes.Dark
+});
+
+// Block: program root (statement container)
+Blockly.Blocks['program_root'] = {
+  init: function(){
+    this.appendDummyInput().appendField('Programa (máx 15 instrucciones)');
+    this.appendStatementInput('SEQ').setCheck(null).appendField('instrucciones');
+    this.setColour(200);
+    this.setTooltip('Arrastrá aquí las instrucciones en orden.');
+    this.setHelpUrl('');
+  }
 };
 
-function hexToBytes(hex){
-  const clean = (hex||'').replace(/\s+/g,'').toLowerCase();
-  if(!/^[0-9a-f]*$/.test(clean)) throw new Error('HEX inválido');
-  if(clean.length % 2 !== 0) throw new Error('Longitud HEX no es múltiplo de 2');
-  const len = clean.length/2; const out = new Uint8Array(len);
-  for(let i=0;i<len;i++){ out[i] = parseInt(clean.substr(i*2,2),16); }
-  return out;
+// Instruction blocks
+Blockly.Blocks['led_color'] = {
+  init: function(){
+    this.appendDummyInput()
+      .appendField('LED color')
+      .appendField(new Blockly.FieldDropdown([
+        ['apagar (0)','0'],
+        ['rojo (1)','1'],['verde (2)','2'],['azul (3)','3'],
+        ['amarillo (4)','4'],['magenta (5)','5'],['cian (6)','6'],
+        ['naranja (7)','7'],['violeta (8)','8'],['blanco (9)','9']
+      ]),'CFG');
+    this.setPreviousStatement(true,null);
+    this.setNextStatement(true,null);
+    this.setColour(110);
+    this.setTooltip('Instrucción 1: NeoPixel.');
+  }
+};
+
+Blockly.Blocks['motor_action'] = {
+  init: function(){
+    this.appendDummyInput()
+      .appendField('Motores')
+      .appendField(new Blockly.FieldDropdown([
+        ['parar (0)','0'],
+        ['avanzar (1)','1'],
+        ['retroceder (2)','2'],
+        ['derecha (3)','3'],
+        ['izquierda (4)','4']
+      ]),'CFG');
+    this.setPreviousStatement(true,null);
+    this.setNextStatement(true,null);
+    this.setColour(20);
+    this.setTooltip('Instrucción 2: mover 400 ms y frenar.');
+  }
+};
+
+Blockly.Blocks['note_play'] = {
+  init: function(){
+    this.appendDummyInput()
+      .appendField('Nota (buzzer)')
+      .appendField(new Blockly.FieldDropdown([
+        ['off (0)','0'],
+        ['do (1)','1'],['re (2)','2'],['mi (3)','3'],
+        ['fa (4)','4'],['sol (5)','5'],['la (6)','6'],['si (7)','7']
+      ]),'CFG');
+    this.setPreviousStatement(true,null);
+    this.setNextStatement(true,null);
+    this.setColour(300);
+    this.setTooltip('Instrucción 3: tono 300 ms.');
+  }
+};
+
+Blockly.Blocks['wait_secs'] = {
+  init: function(){
+    this.appendDummyInput()
+      .appendField('Esperar (segundos)')
+      .appendField(new Blockly.FieldDropdown([
+        ['1','1'],['2','2'],['3','3'],['4','4'],['5','5'],['6','6'],['7','7'],['8','8'],['9','9']
+      ]),'CFG');
+    this.setPreviousStatement(true,null);
+    this.setNextStatement(true,null);
+    this.setColour(50);
+    this.setTooltip('Instrucción 4: esperar 1..9 s.');
+  }
+};
+
+Blockly.Blocks['skip_inst'] = {
+  init: function(){
+    this.appendDummyInput().appendField('Saltear (código 0)');
+    this.setPreviousStatement(true,null);
+    this.setNextStatement(true,null);
+    this.setColour(0);
+    this.setTooltip('Código 0: no ejecuta, avanza al siguiente paquete.');
+  }
+};
+
+// Helper: build program -> array of [code, config] (len 15)
+function buildProgram(){
+  const rootBlocks = workspace.getTopBlocks(true);
+  const program = [];
+  let start = rootBlocks.find(b => b.type === 'program_root');
+  if(!start){ throw new Error('Agregá el bloque "Programa" y encadená las instrucciones.'); }
+  let conn = start.getInput('SEQ').connection.targetBlock();
+  let safety = 0;
+  while(conn && safety < 200){
+    const t = conn.type;
+    if(t === 'led_color'){
+      program.push([1, Number(conn.getFieldValue('CFG'))]);
+    } else if(t === 'motor_action'){
+      program.push([2, Number(conn.getFieldValue('CFG'))]);
+    } else if(t === 'note_play'){
+      program.push([3, Number(conn.getFieldValue('CFG'))]);
+    } else if(t === 'wait_secs'){
+      program.push([4, Number(conn.getFieldValue('CFG'))]);
+    } else if(t === 'skip_inst'){
+      program.push([0, 0]);
+    }
+    conn = conn.getNextBlock();
+    safety++;
+  }
+  // Trim/pad to exactly 15 packets
+  const trimmed = program.slice(0,15);
+  while(trimmed.length < 15) trimmed.push([0,0]);
+  return trimmed;
 }
 
-async function writeBytes(bytes){
-  if(!charWrite) throw new Error('Característica Write no disponible');
-  // BLE suele limitar a 20 bytes por write sin respuesta → fragmentar
-  const MTU = 20;
-  for(let i=0;i<bytes.length;i+=MTU){
-    const chunk = bytes.slice(i, Math.min(i+MTU, bytes.length));
-    if(charWrite.writeValueWithoutResponse){
-      await charWrite.writeValueWithoutResponse(chunk);
-    } else {
-      await charWrite.writeValue(chunk);
-    }
-  }
+function toHexByte(n){ return n.toString(16).padStart(2,'0'); }
+function programToHexString(pairs){
+  return pairs.map(([c,k]) => toHexByte(c) + toHexByte(k)).join('');
 }
+
+// ====== BLE (FFE0/FFE1/FFE2) ======
+let device, server, service, charWrite, charNotify;
+const UUID_SERVICE = 0xffe0;
+const UUID_CHAR_FFE1 = 0xffe1; // RW/Notify
+const UUID_CHAR_FFE2 = 0xffe2; // W
+
+const $ = s => document.querySelector(s);
+const log = m => { const el=$('#log'); const t=new Date().toLocaleTimeString(); el.textContent += `[${t}] ${m}\n`; el.scrollTop = el.scrollHeight; };
+const setStatus = s => { $('#status').textContent = s; };
 
 async function connect(){
   try{
-    log('Solicitando dispositivo BLE...');
-    device = await navigator.bluetooth.requestDevice({
-      filters:[{ services:[UUID_SERVICE] }],
-      optionalServices:[UUID_SERVICE]
-    });
-    device.addEventListener('gattserverdisconnected', onDisconnected);
+    device = await navigator.bluetooth.requestDevice({ filters:[{ services:[UUID_SERVICE] }], optionalServices:[UUID_SERVICE] });
+    device.addEventListener('gattserverdisconnected', ()=>{ setStatus('Desconectado'); log('Desconectado'); $('#btnSend').disabled=true; });
     server = await device.gatt.connect();
     setStatus('Conectado'); log('Conectado a '+device.name);
-
     service = await server.getPrimaryService(UUID_SERVICE);
-    // Intentar FFE1 primero, luego FFE2
-    try { charWrite = await service.getCharacteristic(UUID_CHAR_FFE1); log('FFE1 disponible'); }
-    catch { log('FFE1 no disponible, probando FFE2...'); }
-    if(!charWrite){ charWrite = await service.getCharacteristic(UUID_CHAR_FFE2); log('Usando FFE2 para escritura'); }
-
-    // Intentar Notify (FFE1)
-    try{
-      charNotify = await service.getCharacteristic(UUID_CHAR_FFE1);
-      await charNotify.startNotifications();
-      charNotify.addEventListener('characteristicvaluechanged', e=>{
-        const v = new Uint8Array(e.target.value.buffer);
-        log('Notif ← '+Array.from(v).map(b=>b.toString(16).padStart(2,'0')).join(''));
-      });
-      log('Notify activo en FFE1');
-    }catch{ log('Notify no disponible'); }
-
-    enableUI(true);
-  }catch(err){ log('Error conectando: '+err.message); setStatus('Desconectado'); }
+    try{ charWrite = await service.getCharacteristic(UUID_CHAR_FFE1); log('FFE1 disponible'); }
+    catch{ log('FFE1 no disponible, probando FFE2...'); }
+    if(!charWrite){ charWrite = await service.getCharacteristic(UUID_CHAR_FFE2); log('Usando FFE2 (Write)'); }
+    try{ charNotify = await service.getCharacteristic(UUID_CHAR_FFE1); await charNotify.startNotifications(); log('Notify en FFE1 activo'); }
+    catch{ log('Notify no disponible'); }
+    $('#btnSend').disabled = false;
+  }catch(e){ log('Error BLE: '+e.message); setStatus('Desconectado'); }
 }
 
-function onDisconnected(){ setStatus('Desconectado'); enableUI(false); log('Desconectado'); }
+async function writeBytes(bytes){
+  const MTU = 20; // BLE chunks
+  for(let i=0;i<bytes.length;i+=MTU){
+    const chunk = bytes.slice(i, Math.min(i+MTU, bytes.length));
+    if(charWrite.writeValueWithoutResponse) await charWrite.writeValueWithoutResponse(chunk);
+    else await charWrite.writeValue(chunk);
+  }
+}
 
-$('#btnConnect').addEventListener('click', connect);
-$('#btnDisconnect').addEventListener('click', ()=>{ if(device?.gatt.connected) device.gatt.disconnect(); });
-$('#btnNotify').addEventListener('click', async()=>{
+async function sendProgram(){
   try{
-    if(!charNotify){ charNotify = await service.getCharacteristic(UUID_CHAR_FFE1); }
-    await charNotify.startNotifications();
-    charNotify.addEventListener('characteristicvaluechanged', e=>{
-      const v = new Uint8Array(e.target.value.buffer);
-      log('Notif ← '+Array.from(v).map(b=>b.toString(16).padStart(2,'0')).join(''));
-    });
-    log('Notify activado');
-  }catch(err){ log('No se pudo activar notify: '+err.message); }
-});
-
-$('#btnSend').addEventListener('click', async()=>{
-  try{
-    const hex = $('#hex').value.trim();
-    const bytes = hexToBytes(hex);
-    log('→ Enviando '+bytes.length+' bytes');
-    await writeBytes(bytes);
+    const pairs = buildProgram();
+    const hex = programToHexString(pairs);
+    $('#hex').value = hex;
+    log('Enviando 15 paquetes ('+pairs.length*2+' bytes)');
+    const flat = new Uint8Array(pairs.flat());
+    await writeBytes(flat);
     log('✔ Enviado');
-  }catch(err){ log('Error envío: '+err.message); }
+  }catch(e){ log('Error: '+e.message); }
+}
+
+// UI bindings
+$('#btnConnect').addEventListener('click', connect);
+$('#btnDisconnect').addEventListener('click', ()=>{ if(device?.gatt?.connected) device.gatt.disconnect(); });
+$('#btnSend').addEventListener('click', sendProgram);
+$('#btnClear').addEventListener('click', ()=>{ workspace.clear(); });
+
+$('#btnSave').addEventListener('click', ()=>{
+  const data = Blockly.serialization.workspaces.save(workspace);
+  const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download='smartteam_blocks_project.json'; a.click(); URL.revokeObjectURL(a.href);
+});
+$('#btnLoad').addEventListener('click', ()=> $('#fileLoad').click());
+$('#fileLoad').addEventListener('change', (e)=>{
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader(); r.onload = ()=>{ try{ const data = JSON.parse(r.result); workspace.clear(); Blockly.serialization.workspaces.load(data, workspace);}catch(err){ log('No se pudo cargar: '+err.message);} };
+  r.readAsText(f);
 });
 
-// Programas de ejemplo (A/B/C)
-const PROG_A = '01040301040101070305040101090303040101000402000004010307';
-const PROG_B = '02010401020304010204010202040102000402010103040401'; // 15 pares (patrón motores + extras)
-const PROG_C = '01020201040103020105040102030401030601000402000004010301';
-
-$('#btnProgA').addEventListener('click', ()=>{ $('#hex').value = PROG_A; });
-$('#btnProgB').addEventListener('click', ()=>{ $('#hex').value = PROG_B; });
-$('#btnProgC').addEventListener('click', ()=>{ $('#hex').value = PROG_C; });
-
+// Seed workspace with a root block
+(function seed(){
+  const xmlText = `
+  <xml xmlns="https://developers.google.com/blockly/xml">
+    <block type="program_root" id="root" deletable="false" x="40" y="30"></block>
+  </xml>`;
+  const xml = Blockly.Xml.textToDom(xmlText);
+  Blockly.Xml.domToWorkspace(xml, workspace);
+})();
 </script>
 </body>
 </html>
