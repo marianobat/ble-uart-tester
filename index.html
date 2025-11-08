@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BLE UART Tester – DX BT24 ↔ Arduino Nano</title>
+  <style>
+    :root{--bg:#0f1221;--card:#181c34;--text:#e9ecff;--muted:#a9b2d6;--accent:#7aa2ff;--ok:#40dba5;--warn:#ffad5a;--err:#ff6b6b}
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,#0f1221,#121634);color:var(--text);font:15px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
+    .wrap{max-width:880px;margin:32px auto;padding:0 16px}
+    header{display:flex;gap:12px;align-items:center;}
+    h1{font-size:22px;margin:0}
+    .card{background:var(--card);border-radius:16px;padding:16px;margin:16px 0;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    button{appearance:none;border:0;border-radius:12px;padding:10px 14px;background:#232a50;color:var(--text);cursor:pointer;box-shadow:inset 0 -2px 0 rgba(0,0,0,.2)}
+    button.primary{background:linear-gradient(90deg,#5a7aff,#7aa2ff)}
+    button.ok{background:linear-gradient(90deg,#2ccfa0,#40dba5)}
+    button.warn{background:linear-gradient(90deg,#ffad5a,#ffc46b);color:#111}
+    button.err{background:linear-gradient(90deg,#ff6b6b,#ffa3a3)}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    label{display:block;font-weight:600;margin-bottom:8px;color:var(--muted)}
+    input,textarea{width:100%;border:1px solid #2c3566;background:#0f1330;color:var(--text);border-radius:12px;padding:10px}
+    textarea{min-height:110px;resize:vertical}
+    code.inline{background:#0f1330;padding:2px 6px;border-radius:6px}
+    .log{height:180px;overflow:auto;background:#0d1027;border:1px solid #2c3566;border-radius:12px;padding:10px;font-family:ui-monospace,Menlo,Consolas,monospace}
+    .pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#232a50;color:#cbd3ff;font-size:12px;margin-right:6px}
+    .footer{color:#a9b2d6;font-size:12px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>BLE UART Tester – DX BT24 ↔ Arduino Nano</h1>
+      <span id="status" class="pill">Desconectado</span>
+    </header>
+
+    <div class="card">
+      <div class="row">
+        <button id="btnConnect" class="primary">🔗 Conectar BLE (FFE0)</button>
+        <button id="btnDisconnect">🔌 Desconectar</button>
+        <button id="btnNotify" class="ok" disabled>📡 Activar Notify</button>
+      </div>
+      <div style="margin-top:8px" class="footer">
+        Servicio objetivo: <code class="inline">0xFFE0</code> · Características: <code class="inline">0xFFE1</code> (RW/Notify) o <code class="inline">0xFFE2</code> (W)
+      </div>
+    </div>
+
+    <div class="card">
+      <label for="hex">Cadena HEX (múltiplo de 2 dígitos). Para el firmware actual: exactamente 30 bytes (15 pares <code class="inline">código,config</code>).</label>
+      <textarea id="hex" placeholder="Pegá aquí tu bytearray HEX, p. ej.: 01040301040101070305040101090303040101000402000004010307"></textarea>
+      <div class="row" style="margin-top:10px">
+        <button id="btnSend" class="ok" disabled>🚀 Enviar HEX → BLE</button>
+        <button id="btnProgA" class="warn" disabled>Programa A</button>
+        <button id="btnProgB" disabled>Programa B</button>
+        <button id="btnProgC" disabled>Programa C</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <label>Log</label>
+      <div id="log" class="log"></div>
+    </div>
+
+    <div class="footer">Sugerencia iOS: usar navegador <strong>Bluefy</strong> para Web Bluetooth. En Android/desktop usá Chrome/Edge.</div>
+  </div>
+
+<script>
+let device, server, service, charWrite, charNotify;
+const UUID_SERVICE = 0xffe0;        // Unknown Service (HM-10 style)
+const UUID_CHAR_FFE1 = 0xffe1;      // RW/Notify
+const UUID_CHAR_FFE2 = 0xffe2;      // W/WNR
+
+const $ = sel => document.querySelector(sel);
+const log = msg => { const el=$('#log'); const t=new Date().toLocaleTimeString(); el.innerText += `[${t}] ${msg}\n`; el.scrollTop = el.scrollHeight; };
+const setStatus = s => $('#status').textContent = s;
+const enableUI = en => {
+  $('#btnSend').disabled = !en;
+  $('#btnProgA').disabled = !en;
+  $('#btnProgB').disabled = !en;
+  $('#btnProgC').disabled = !en;
+  $('#btnNotify').disabled = !en;
+};
+
+function hexToBytes(hex){
+  const clean = (hex||'').replace(/\s+/g,'').toLowerCase();
+  if(!/^[0-9a-f]*$/.test(clean)) throw new Error('HEX inválido');
+  if(clean.length % 2 !== 0) throw new Error('Longitud HEX no es múltiplo de 2');
+  const len = clean.length/2; const out = new Uint8Array(len);
+  for(let i=0;i<len;i++){ out[i] = parseInt(clean.substr(i*2,2),16); }
+  return out;
+}
+
+async function writeBytes(bytes){
+  if(!charWrite) throw new Error('Característica Write no disponible');
+  // BLE suele limitar a 20 bytes por write sin respuesta → fragmentar
+  const MTU = 20;
+  for(let i=0;i<bytes.length;i+=MTU){
+    const chunk = bytes.slice(i, Math.min(i+MTU, bytes.length));
+    if(charWrite.writeValueWithoutResponse){
+      await charWrite.writeValueWithoutResponse(chunk);
+    } else {
+      await charWrite.writeValue(chunk);
+    }
+  }
+}
+
+async function connect(){
+  try{
+    log('Solicitando dispositivo BLE...');
+    device = await navigator.bluetooth.requestDevice({
+      filters:[{ services:[UUID_SERVICE] }],
+      optionalServices:[UUID_SERVICE]
+    });
+    device.addEventListener('gattserverdisconnected', onDisconnected);
+    server = await device.gatt.connect();
+    setStatus('Conectado'); log('Conectado a '+device.name);
+
+    service = await server.getPrimaryService(UUID_SERVICE);
+    // Intentar FFE1 primero, luego FFE2
+    try { charWrite = await service.getCharacteristic(UUID_CHAR_FFE1); log('FFE1 disponible'); }
+    catch { log('FFE1 no disponible, probando FFE2...'); }
+    if(!charWrite){ charWrite = await service.getCharacteristic(UUID_CHAR_FFE2); log('Usando FFE2 para escritura'); }
+
+    // Intentar Notify (FFE1)
+    try{
+      charNotify = await service.getCharacteristic(UUID_CHAR_FFE1);
+      await charNotify.startNotifications();
+      charNotify.addEventListener('characteristicvaluechanged', e=>{
+        const v = new Uint8Array(e.target.value.buffer);
+        log('Notif ← '+Array.from(v).map(b=>b.toString(16).padStart(2,'0')).join(''));
+      });
+      log('Notify activo en FFE1');
+    }catch{ log('Notify no disponible'); }
+
+    enableUI(true);
+  }catch(err){ log('Error conectando: '+err.message); setStatus('Desconectado'); }
+}
+
+function onDisconnected(){ setStatus('Desconectado'); enableUI(false); log('Desconectado'); }
+
+$('#btnConnect').addEventListener('click', connect);
+$('#btnDisconnect').addEventListener('click', ()=>{ if(device?.gatt.connected) device.gatt.disconnect(); });
+$('#btnNotify').addEventListener('click', async()=>{
+  try{
+    if(!charNotify){ charNotify = await service.getCharacteristic(UUID_CHAR_FFE1); }
+    await charNotify.startNotifications();
+    charNotify.addEventListener('characteristicvaluechanged', e=>{
+      const v = new Uint8Array(e.target.value.buffer);
+      log('Notif ← '+Array.from(v).map(b=>b.toString(16).padStart(2,'0')).join(''));
+    });
+    log('Notify activado');
+  }catch(err){ log('No se pudo activar notify: '+err.message); }
+});
+
+$('#btnSend').addEventListener('click', async()=>{
+  try{
+    const hex = $('#hex').value.trim();
+    const bytes = hexToBytes(hex);
+    log('→ Enviando '+bytes.length+' bytes');
+    await writeBytes(bytes);
+    log('✔ Enviado');
+  }catch(err){ log('Error envío: '+err.message); }
+});
+
+// Programas de ejemplo (A/B/C)
+const PROG_A = '01040301040101070305040101090303040101000402000004010307';
+const PROG_B = '02010401020304010204010202040102000402010103040401'; // 15 pares (patrón motores + extras)
+const PROG_C = '01020201040103020105040102030401030601000402000004010301';
+
+$('#btnProgA').addEventListener('click', ()=>{ $('#hex').value = PROG_A; });
+$('#btnProgB').addEventListener('click', ()=>{ $('#hex').value = PROG_B; });
+$('#btnProgC').addEventListener('click', ()=>{ $('#hex').value = PROG_C; });
+
+</script>
+</body>
+</html>
